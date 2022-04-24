@@ -1,0 +1,5 @@
+# Plain QUIC Plugin
+
+It's a slight modification version of the QUIC dissector in the Wireshark repository. It assumes that all packets are transmitted in plain text, thus skipping all decryption operations.
+
+It sounds ridiculous at first glance; why do we ever send plain QUIC packets to the wire? It's written for our course that teaches students QUIC by guiding them in implementing it from scratch. Since complete QUIC implementation is almost impossible for a one-semester class, students can implement only features they are interested in, such as connection migration or flow control. QUIC handshake and packet protection are optional features, as you might expect. This plugin might help them read packet dumps.
