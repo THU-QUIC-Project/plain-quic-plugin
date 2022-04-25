@@ -3,7 +3,7 @@ PROJECT(plain_quic_plugin C)
 CMAKE_MINIMUM_REQUIRED(VERSION 3.15)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
-find_package(Wireshark 3.2 REQUIRED PATHS $ENV{WIRESHARK_PATH} /Users/minhuw/Documents/wireshark/wireshark-install)
+find_package(Wireshark REQUIRED PATHS $ENV{WIRESHARK_PATH})
 
 MESSAGE(STATUS "Wireshark_FOUND: ${Wireshark_FOUND}")
 MESSAGE(STATUS "Wireshark_VERSION_MAJOR: ${Wireshark_VERSION_MAJOR}")
