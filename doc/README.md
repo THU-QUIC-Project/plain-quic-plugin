@@ -14,4 +14,8 @@
 
 Note that QUIC packets are displayed as "QUIC Plain" instead of "QUIC IETF". Ethernet packets should be at least 64 bytes long to be decoded correctly.
 
+* User `quic_plain` instead of `quic` to filter packets in the Wireshark query window.
+
+![Filter](./filter.png)
+
 Please submit issues on https://github.com/THU-QUIC-Project/THU-QUIC-Project-2022 for any problems.
