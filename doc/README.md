@@ -2,6 +2,8 @@
 
 * Download the dynamic library according to your Operating System. And put it to the OS-specific directory as described in the [Wireshark Document](https://www.wireshark.org/docs/wsug_html_chunked/ChPluginFolders.html).
 
+    * Install `glib` using `brew install glib` in macOS.
+
 * Check that plugin is displayed on "About Wireshark" -> "Plugins" -> Filter by type "dissector".
 
 ![Plugin Loaded Successfully](./plugin_load.png)
