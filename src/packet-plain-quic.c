@@ -314,9 +314,11 @@ typedef struct _quic_follow_stream {
     guint64         stream_id;
 } quic_follow_stream;
 
+
 typedef struct quic_follow_tap_data {
     tvbuff_t *tvb;
     guint64  stream_id;
+    gboolean from_server;
 } quic_follow_tap_data_t;
 
 /**
@@ -2987,7 +2989,7 @@ quic_streams_add(packet_info *pinfo, quic_info_data_t *quic_info, guint64 stream
     }
     if (!wmem_list_find(quic_info->streams_list, GUINT_TO_POINTER(stream_id))) {
         wmem_list_insert_sorted(quic_info->streams_list, GUINT_TO_POINTER(stream_id),
-                                uint_compare);
+                                wmem_compare_uint);
     }
 
     /* Map: first Stream ID for each UDP payload */
@@ -3083,6 +3085,16 @@ quic_get_stream_id_ge(guint streamid, guint sub_stream_id, guint *sub_stream_id_
     return FALSE;
 }
 
+static gboolean
+quic_get_sub_stream_id(guint streamid, guint sub_stream_id, gboolean le, guint *sub_stream_id_out)
+{
+    if (le) {
+        return quic_get_stream_id_le(streamid, sub_stream_id, sub_stream_id_out);
+    } else {
+        return quic_get_stream_id_ge(streamid, sub_stream_id, sub_stream_id_out);
+    }
+}
+
 static gchar *
 quic_follow_conv_filter(epan_dissect_t *edt _U_, packet_info *pinfo, guint *stream, guint *sub_stream)
 {
@@ -3125,8 +3137,9 @@ quic_follow_address_filter(address *src_addr _U_, address *dst_addr _U_, int src
 }
 
 static tap_packet_status
-follow_quic_tap_listener(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_, const void *data)
+follow_quic_tap_listener(void *tapdata, packet_info *pinfo, epan_dissect_t *edt _U_, const void *data, tap_flags_t flags _U_)
 {
+    follow_record_t *follow_record;
     follow_info_t *follow_info = (follow_info_t *)tapdata;
     const quic_follow_tap_data_t *follow_data = (const quic_follow_tap_data_t *)data;
 
@@ -3135,7 +3148,44 @@ follow_quic_tap_listener(void *tapdata, packet_info *pinfo, epan_dissect_t *edt 
         return TAP_PACKET_DONT_REDRAW;
     }
 
-    return follow_tvb_tap_listener(tapdata, pinfo, NULL, follow_data->tvb);
+    follow_record = g_new(follow_record_t, 1);
+
+    // XXX: Ideally, we should also deal with stream retransmission
+    // and out of order packets in a similar manner to the TCP dissector,
+    // using the offset, plus ACKs and other information.
+    follow_record->data = g_byte_array_sized_new(tvb_captured_length(follow_data->tvb));
+    follow_record->data = g_byte_array_append(follow_record->data, tvb_get_ptr(follow_data->tvb, 0, -1), tvb_captured_length(follow_data->tvb));
+    follow_record->packet_num = pinfo->fd->num;
+    follow_record->abs_ts = pinfo->fd->abs_ts;
+
+    /* This sets the address and port information the first time this
+     * stream is tapped. It will no longer be true after migration, but
+     * as it seems it's only used for display, using the initial values
+     * is the best we can do.
+     */
+
+    if (follow_data->from_server) {
+        follow_record->is_server = TRUE;
+        if (follow_info->client_port == 0) {
+            follow_info->server_port = pinfo->srcport;
+            copy_address(&follow_info->server_ip, &pinfo->src);
+            follow_info->client_port = pinfo->destport;
+            copy_address(&follow_info->client_ip, &pinfo->dst);
+        }
+    } else {
+        follow_record->is_server = FALSE;
+        if (follow_info->client_port == 0) {
+            follow_info->client_port = pinfo->srcport;
+            copy_address(&follow_info->client_ip, &pinfo->src);
+            follow_info->server_port = pinfo->destport;
+            copy_address(&follow_info->server_ip, &pinfo->dst);
+        }
+    }
+
+    follow_info->bytes_written[follow_record->is_server] += follow_record->data->len;
+
+    follow_info->payload = g_list_prepend(follow_info->payload, follow_record);
+    return TAP_PACKET_DONT_REDRAW;
 }
 
 static guint32
@@ -3821,7 +3871,8 @@ proto_register_quic_plain(void)
     register_cleanup_routine(quic_cleanup);
 
     register_follow_stream(proto_quic_plain, "quic_plain_follow", quic_follow_conv_filter, quic_follow_index_filter, quic_follow_address_filter,
-                           udp_port_to_display, follow_quic_tap_listener);
+                           udp_port_to_display, follow_quic_tap_listener, get_quic_connections_count,
+                           quic_get_sub_stream_id);
 
     // TODO implement custom reassembly functions that uses the QUIC Connection
     // ID instead of address and port numbers.
